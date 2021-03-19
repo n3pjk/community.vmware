@@ -262,8 +262,8 @@ class VmwareContentDeployTemplate(VmwareRestClient):
             self.placement_spec.resource_pool = self.resourcepool_id
         if self.cluster_id:
             self.placement_spec.cluster = self.cluster_id
-        self.vm_home_storage_spec = LibraryItems.DeploySpecVmHomeStorage(datastore=to_native(self.datastore_id))
-        self.disk_storage_spec = LibraryItems.DeploySpecDiskStorage(datastore=to_native(self.datastore_id))
+        self.vm_home_storage_spec = LibraryItems.DeploySpecVmHomeStorage(datastore=self.datastore_id)
+        self.disk_storage_spec = LibraryItems.DeploySpecDiskStorage(datastore=self.datastore_id)
         self.deploy_spec = LibraryItems.DeploySpec(name=self.vm_name,
                                                    placement=self.placement_spec,
                                                    vm_home_storage=self.vm_home_storage_spec,
