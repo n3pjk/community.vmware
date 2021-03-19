@@ -4,10 +4,10 @@
   gather_facts: no
   connection: local
   vars:
-    collection_namespace: "servicenow"
-    collection_name: servicenow
+    collection_namespace: "community"
+    collection_name: "vmware"
     collection_version: "{{ github_tag.split('/')[-1] | regex_search('(\\d.\\d.\\d.*)') }}"
-    collection_repo: https://github.com/ServiceNowITOM/servicenow-ansible
+    collection_repo: https://github.com/ansible-collections/community.vmware
     api_key: undef
 
   tasks:
