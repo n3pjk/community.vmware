@@ -156,15 +156,15 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self.resourcepool_id = None
 
         # Turn on debug if not specified, but ANSIBLE_DEBUG is set
-        self.module_debug = {}
+        self.result['debug'] = {}
         if self.module._debug:
             self.warn('Enable debug output because ANSIBLE_DEBUG was set.')
             self.params['log_level'] = 'debug'
-        self.log_level = (self.params['log_level']).lower
+        self.log_level = self.params['log_level']
         if self.log_level == 'debug':
             # Turn on debugging
             logging.basicConfig(level=logging.DEBUG)
-            logging.debug("Debug on for ServiceNowModule.")
+            logging.debug("Debug on for VmwareContentDeployOvfTemplate.")
 
         # Get parameters
         self.template = self.params.get('template')
@@ -195,38 +195,14 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                 )
             )
 
-    # Debugging
-    #
-    # Tools to handle debugging output from the APIs.
-    def _mod_debug(self, key, value):
-        self.module_debug[key] = value
-
     #
     # Extend AnsibleModule methods
     #
 
     def fail(self, msg):
-        if self.log_level == 'debug' and self.module_debug:
-            if 'invocation' not in self.result:
-                self.result['invocation'] = {
-                    'module_args': self.params,
-                    'module_debug': self.module_debug
-                }
-            else:
-                self.result['invocation'].update(
-                    module_debug=self.module_debug
-                )
         self.module.fail_json(msg=msg, **self.result)
 
     def exit(self):
-        '''Called to end module'''
-        if 'invocation' not in self.result:
-            self.result['invocation'] = {
-                'module_args': self.params,
-            }
-        if self.log_level == 'debug' and self.module_debug:
-            self.result['invocation'].update(
-                module_debug=self.module_debug)
         self.module.exit_json(**self.result)
 
     def deploy_vm_from_ovf_template(self):
@@ -238,7 +214,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         # Find the datastore by the given datastore name
         if self.datastore:
             self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
-            self._mod_debug('datastore_id', self.datastore_id)
+            self.result['debug']['datastore_id'] = self.datastore_id
             if not self.datastore_id:
                 self.fail(msg="Failed to find the datastore %s" % self.datastore)
 
@@ -247,7 +223,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             dsc = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster)
             if dsc:
                 self.datastore_id = self.pyv.get_recommended_datastore(dsc)
-                self._mod_debug('dsc_datastore_id', self.datastore_id)
+                self.result['debug']['dsc_datastore_id'] = self.datastore_id
             else:
                 self.fail(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
 
