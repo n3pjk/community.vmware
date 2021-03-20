@@ -198,12 +198,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
     # Debugging
     #
     # Tools to handle debugging output from the APIs.
-    def _mod_debug(self, key, **kwargs):
-        self.module_debug[key] = kwargs
-        if 'module_debug' not in self.module_debug:
-            self.module_debug = dict(key=kwargs)
-        else:
-            self.module_debug.update(key=kwargs)
+    def _mod_debug(self, key, value):
+        self.module_debug[key] = value
 
     #
     # Extend AnsibleModule methods
@@ -238,7 +234,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         # Find the datastore by the given datastore name
         if self.datastore:
             self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
-            self._mod_debug('datastore_id', **self.datastore_id)
+            self._mod_debug('datastore_id', self.datastore_id)
             if not self.datastore_id:
                 self.fail(msg="Failed to find the datastore %s" % self.datastore)
 
@@ -247,7 +243,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             dsc = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster)
             if dsc:
                 self.datastore_id = self.pyv.get_recommended_datastore(dsc)
-                self._mod_debug('dsc_datastore_id', **self.datastore_id)
+                self._mod_debug('dsc_datastore_id', self.datastore_id)
             else:
                 self.fail(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
 
