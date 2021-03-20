@@ -159,6 +159,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self.vm_name = self.params.get('name')
         self.datacenter = self.params.get('datacenter')
         self.datastore = self.params.get('datastore')
+        self.datastore_cluster = self.params.get('datastore_cluster')
         self.folder = self.params.get('folder')
         self.resourcepool = self.params.get('resource_pool')
         self.cluster = self.params.get('cluster')
