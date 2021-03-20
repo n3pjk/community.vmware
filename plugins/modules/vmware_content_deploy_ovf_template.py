@@ -208,7 +208,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
     def fail(self, msg):
         if self.log_level == 'debug':
             pass
-        self.module.fail_json(self, msg=msg, **self.result)
+        self.module.fail_json(msg=msg, **self.result)
 
     def exit(self):
         '''Called to end module'''
@@ -223,7 +223,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             if self.module_debug:
                 self.result['invocation'].update(
                     module_debug=self.module_debug)
-        self.module.exit_json(self, **self.result)
+        self.module.exit_json(**self.result)
 
     def deploy_vm_from_ovf_template(self):
         # Find the datacenter by the given datacenter name
