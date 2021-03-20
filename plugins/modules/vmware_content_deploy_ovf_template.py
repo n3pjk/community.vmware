@@ -206,8 +206,9 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
     #
 
     def fail(self, msg):
-        if self.log_level == 'debug':
-            pass
+        if self.log_level == 'debug' and self.module_debug:
+            self.result['invocation'].update(
+                module_debug=self.module_debug)
         self.module.fail_json(msg=msg, **self.result)
 
     def exit(self):
