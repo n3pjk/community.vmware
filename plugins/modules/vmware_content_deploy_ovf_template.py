@@ -119,18 +119,21 @@ vm_deploy_info:
     }
 '''
 
-from ansible.module_utils.basic import AnsibleModule
+import traceback
+
+from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib
 from ansible.module_utils._text import to_native
 from ansible_collections.community.vmware.plugins.module_utils.vmware_rest_client import VmwareRestClient
 from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi
 
-HAS_VAUTOMATION_PYTHON_SDK = False
+HAS_VAUTOMATION = False
+VAUTOMATION_IMP_ERR = None
 try:
     from com.vmware.vcenter.ovf_client import LibraryItem
     from com.vmware.vapi.std.errors_client import Error
-    HAS_VAUTOMATION_PYTHON_SDK = True
+    HAS_VAUTOMATION = True
 except ImportError:
-    pass
+    VAUTOMATION_IMP_ERR = traceback.format_exc()
 
 
 class VmwareContentDeployOvfTemplate(VmwareRestClient):
@@ -163,6 +166,10 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self.storage_provisioning = self.params.get('storage_provisioning')
         if self.storage_provisioning == 'eagerzeroedthick':
             self.storage_provisioning = 'eagerZeroedThick'
+
+        if not HAS_VAUTOMATION:
+            AnsibleModule.fail_json(self, msg=missing_required_lib('vSphere-Automation-SDK'),
+                                    exception=VAUTOMATION_IMP_ERR)
 
         vm = self.pyv.get_vm()
         if vm:
@@ -315,7 +322,7 @@ def main():
         datastore_cluster=dict(
             type='str',
             required=False
-        )
+        ),
         folder=dict(
             type='str',
             default='vm'
