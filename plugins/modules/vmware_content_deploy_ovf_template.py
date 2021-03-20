@@ -137,8 +137,22 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
     def __init__(self, module):
         """Constructor."""
         super(VmwareContentDeployOvfTemplate, self).__init__(module)
-        self.ovf_template_name = self.params.get('ovf_template')
-        self.content_library_name = self.params.get('content_library')
+
+        # Initialize member variables
+        self.module = module
+        self.pyv = PyVmomi(module=module)
+        self.template_service = self.api_client.vcenter.vm_template.LibraryItems
+        self.datacenter_id = None
+        self.datastore_id = None
+        self.library_item_id = None
+        self.folder_id = None
+        self.host_id = None
+        self.cluster_id = None
+        self.resourcepool_id = None
+
+        # Get parameters
+        self.template = self.params.get('template')
+        self.library = self.params.get('library')
         self.vm_name = self.params.get('name')
         self.datacenter = self.params.get('datacenter')
         self.datastore = self.params.get('datastore')
@@ -150,43 +164,75 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         if self.storage_provisioning == 'eagerzeroedthick':
             self.storage_provisioning = 'eagerZeroedThick'
 
+        vm = self.pyv.get_vm()
+        if vm:
+            self.module.exit_json(
+                changed=False,
+                vm_deploy_info=dict(
+                    msg="Virtual Machine '%s' already Exists." % self.vm_name,
+                    vm_id=vm._moId,
+                )
+            )
+
     def deploy_vm_from_ovf_template(self):
         # Find the datacenter by the given datacenter name
         self.datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
         if not self.datacenter_id:
             self.module.fail_json(msg="Failed to find the datacenter %s" % self.datacenter)
+
         # Find the datastore by the given datastore name
-        self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
+        if self.datastore:
+            self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
+            if not self.datastore_id:
+                self.module.fail_json(msg="Failed to find the datastore %s" % self.datastore)
+
+        # Find the datastore by the given datastore cluster name
+        if self.datastore_cluster and not self.datastore_id:
+            dsc = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster)
+            if dsc:
+                self.datastore_id = self.pyv.get_recommended_datastore(dsc)
+            else:
+                self.module.fail_json(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
+
         if not self.datastore_id:
-            self.module.fail_json(msg="Failed to find the datastore %s" % self.datastore)
+            self.module.fail_json(msg="Failed to find the datastore using either datastore or datastore cluster")
+
         # Find the LibraryItem (Template) by the given LibraryItem name
-        if self.content_library_name:
+        if self.library:
             self.library_item_id = self.get_library_item_from_content_library_name(
-                self.ovf_template_name, self.content_library_name)
+                self.template, self.library)
             if not self.library_item_id:
-                self.module.fail_json(msg="Failed to find the library Item %s in content library %s" % (self.ovf_template_name, self.content_library_name))
+                self.module.fail_json(msg="Failed to find the library Item %s in content library %s" % (self.template, self.library))
         else:
-            self.library_item_id = self.get_library_item_by_name(self.ovf_template_name)
+            self.library_item_id = self.get_library_item_by_name(self.template)
             if not self.library_item_id:
-                self.module.fail_json(msg="Failed to find the library Item %s" % self.ovf_template_name)
+                self.module.fail_json(msg="Failed to find the library Item %s" % self.template)
+
         # Find the folder by the given folder name
         self.folder_id = self.get_folder_by_name(self.datacenter, self.folder)
         if not self.folder_id:
             self.module.fail_json(msg="Failed to find the folder %s" % self.folder)
-        # Find the Host by given HostName
-        self.host_id = self.get_host_by_name(self.datacenter, self.host)
-        if not self.host_id:
-            self.module.fail_json(msg="Failed to find the Host %s" % self.host)
+
+        # Verfy host exists if specified
+        if self.host:
+            self.host_id = self.get_host_by_name(self.datacenter, self.host)
+            if not self.host_id:
+                self.module.fail_json(msg="Failed to find the Host %s" % self.host)
+
         # Find the resourcepool by the given resourcepool name
-        self.resourcepool_id = self.get_resource_pool_by_name(self.datacenter, self.resourcepool, self.cluster, self.host)
-        if not self.resourcepool_id:
-            self.module.fail_json(msg="Failed to find the resource_pool %s" % self.resourcepool)
-        # Find the Cluster by the given Cluster name
-        self.cluster_id = None
-        if self.cluster:
+        if self.resourcepool:
+            self.resourcepool_id = self.get_resource_pool_by_name(self.datacenter, self.resourcepool, self.cluster, self.host)
+            if not self.resourcepool_id:
+                self.module.fail_json(msg="Failed to find the resource_pool %s" % self.resourcepool)
+        elif self.cluster:
             self.cluster_id = self.get_cluster_by_name(self.datacenter, self.cluster)
             if not self.cluster_id:
                 self.module.fail_json(msg="Failed to find the Cluster %s" % self.cluster)
+            cluster_obj = self.api_client.vcenter.Cluster.get(self.cluster_id)
+            self.resourcepool_id = cluster_obj.resource_pool
+
+        if not self.resourcepool_id:
+            self.module.fail_json(msg="Failed to find a resource pool either by name or cluster")
 
         deployment_target = LibraryItem.DeploymentTarget(
             resource_pool_id=self.resourcepool_id,
@@ -235,33 +281,80 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
 def main():
     argument_spec = VmwareRestClient.vmware_client_argument_spec()
     argument_spec.update(
-        ovf_template=dict(type='str', aliases=['template_src', 'ovf'], required=True),
-        content_library=dict(type='str', required=False),
-        name=dict(type='str', required=True, aliases=['vm_name']),
-        datacenter=dict(type='str', required=True),
-        datastore=dict(type='str', required=True),
-        folder=dict(type='str', required=True),
-        host=dict(type='str', required=True),
-        resource_pool=dict(type='str', required=True),
-        cluster=dict(type='str', required=False),
-        storage_provisioning=dict(type='str',
-                                  required=False,
-                                  choices=['thin', 'thick', 'eagerZeroedThick', 'eagerzeroedthick'],
-                                  default=None),
-    )
-    module = AnsibleModule(argument_spec=argument_spec,
-                           supports_check_mode=True)
-    result = {'failed': False, 'changed': False}
-    pyv = PyVmomi(module=module)
-    vm = pyv.get_vm()
-    if vm:
-        module.exit_json(
-            changed=False,
-            vm_deploy_info=dict(
-                msg="Virtual Machine '%s' already Exists." % module.params['name'],
-                vm_id=vm._moId,
-            )
+        template=dict(
+            type='str',
+            aliases=[
+                'ovf',
+                'ovf_template',
+                'template_src'
+            ],
+            required=True
+        ),
+        library=dict(
+            type='str',
+            aliases=[
+                'content_library'
+            ],
+            required=False
+        ),
+        name=dict(
+            type='str',
+            aliases=[
+                'vm_name'
+            ],
+            required=True
+        ),
+        datacenter=dict(
+            type='str',
+            required=True
+        ),
+        datastore=dict(
+            type='str',
+            required=False
+        ),
+        datastore_cluster=dict(
+            type='str',
+            required=False
         )
+        folder=dict(
+            type='str',
+            default='vm'
+        ),
+        host=dict(
+            type='str',
+            required=False
+        ),
+        resource_pool=dict(
+            type='str',
+            required=False
+        ),
+        cluster=dict(
+            type='str',
+            required=False
+        ),
+        storage_provisioning=dict(
+            type='str',
+            choices=[
+                'thin',
+                'thick',
+                'eagerZeroedThick',
+                'eagerzeroedthick'
+            ],
+            default='thin',
+            fallback=(
+                env_fallback,
+                ['VMWARE_STORAGE_PROVISIONING']
+            )
+        ),
+    )
+    module = AnsibleModule(
+        argument_spec=argument_spec,
+        supports_check_mode=True,
+        required_one_of=[
+            ['datastore', 'datastore_cluster'],
+        ],
+    )
+    result = {'failed': False, 'changed': False}
     vmware_contentlib_create = VmwareContentDeployOvfTemplate(module)
     if module.check_mode:
         result.update(

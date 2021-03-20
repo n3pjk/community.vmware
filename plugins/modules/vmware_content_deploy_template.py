@@ -168,19 +168,22 @@ class VmwareContentDeployTemplate(VmwareRestClient):
     def __init__(self, module):
         """Constructor."""
         super(VmwareContentDeployTemplate, self).__init__(module)
+
+        # Initialize member variables
+        self.module = module
         self.pyv = PyVmomi(module=module)
-        vm = self.pyv.get_vm()
-        if vm:
-            self.module.exit_json(
-                changed=False,
-                vm_deploy_info=dict(
-                    msg="Virtual Machine '%s' already exists." % self.module.params['name'],
-                    vm_id=vm._moId,
-                )
-            )
         self.template_service = self.api_client.vcenter.vm_template.LibraryItems
-        self.template_name = self.params.get('template')
-        self.content_library_name = self.params.get('content_library')
+        self.datacenter_id = None
+        self.datastore_id = None
+        self.library_item_id = None
+        self.folder_id = None
+        self.host_id = None
+        self.cluster_id = None
+        self.resourcepool_id = None
+
+        # Get parameters
+        self.template = self.params.get('template')
+        self.library = self.params.get('library')
         self.vm_name = self.params.get('name')
         self.datacenter = self.params.get('datacenter')
         self.datastore = self.params.get('datastore')
@@ -191,56 +194,62 @@ class VmwareContentDeployTemplate(VmwareRestClient):
         self.cluster = self.params.get('cluster')
         self.host = self.params.get('host')
 
+        vm = self.pyv.get_vm()
+        if vm:
+            module.exit_json(
+                changed=False,
+                vm_deploy_info=dict(
+                    msg="Virtual Machine '%s' already exists." % self.vm_name,
+                    vm_id=vm._moId,
+                )
+            )
+
     def deploy_vm_from_template(self, power_on=False):
         # Find the datacenter by the given datacenter name
         self.datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
         if not self.datacenter_id:
             self.module.fail_json(msg="Failed to find the datacenter %s" % self.datacenter)
 
+        # Find the datastore by the given datastore name
         if self.datastore:
-            # Find the datastore by the given datastore name
             self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
-        if self.datastore_cluster:
-            # Find the datastore by the given datastore cluster name
-            if self.datastore_id:
-                datastore_cluster = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster, folder=self.datastore_id.datastoreFolder)
+            if not self.datastore_id:
+                self.module.fail_json(msg="Failed to find the datastore %s" % self.datastore)
+
+        # Find the datastore by the given datastore cluster name
+        if self.datastore_cluster and not self.datastore_id:
+            dsc = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster)
+            if dsc:
+                self.datastore_id = self.pyv.get_recommended_datastore(dsc)
             else:
-                datastore_cluster = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster)
-            if not datastore_cluster:
                 self.module.fail_json(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
-            self.datastore_id = self.pyv.get_recommended_datastore(datastore_cluster)
 
         if not self.datastore_id:
-            if self.datastore:
-                self.module.fail_json(msg="Failed to find the datastore %s" % self.datastore)
-            if self.datastore_cluster:
-                self.module.fail_json(msg="Failed to find the datastore using datastore cluster %s" % self.datastore_cluster)
+            self.module.fail_json(msg="Failed to find the datastore using either datastore or datastore cluster")
 
         # Find the LibraryItem (Template) by the given LibraryItem name
-        if self.content_library_name:
+        if self.library:
             self.library_item_id = self.get_library_item_from_content_library_name(
-                self.template_name, self.content_library_name)
+                self.template, self.library)
             if not self.library_item_id:
-                self.module.fail_json(msg="Failed to find the library Item %s in content library %s" % (self.template_name, self.content_library_name))
+                self.module.fail_json(msg="Failed to find the library Item %s in content library %s" % (self.template, self.library))
         else:
-            self.library_item_id = self.get_library_item_by_name(self.template_name)
+            self.library_item_id = self.get_library_item_by_name(self.template)
             if not self.library_item_id:
-                self.module.fail_json(msg="Failed to find the library Item %s" % self.template_name)
+                self.module.fail_json(msg="Failed to find the library Item %s" % self.template)
+
         # Find the folder by the given folder name
         self.folder_id = self.get_folder_by_name(self.datacenter, self.folder)
         if not self.folder_id:
             self.module.fail_json(msg="Failed to find the folder %s" % self.folder)
-        # Find the Host by given HostName
-        self.host_id = None
+
+        # Find the Host by given name
         if self.host:
             self.host_id = self.get_host_by_name(self.datacenter, self.host)
             if not self.host_id:
                 self.module.fail_json(msg="Failed to find the Host %s" % self.host)
 
         # Find the resourcepool by the given resourcepool name
-        self.cluster_id = None
-        self.resourcepool_id = None
-
         if self.resourcepool:
             self.resourcepool_id = self.get_resource_pool_by_name(self.datacenter, self.resourcepool, self.cluster, self.host)
             if not self.resourcepool_id:
@@ -262,8 +271,8 @@ class VmwareContentDeployTemplate(VmwareRestClient):
             self.placement_spec.resource_pool = self.resourcepool_id
         if self.cluster_id:
             self.placement_spec.cluster = self.cluster_id
-        self.vm_home_storage_spec = LibraryItems.DeploySpecVmHomeStorage(datastore=self.datastore_id)
-        self.disk_storage_spec = LibraryItems.DeploySpecDiskStorage(datastore=self.datastore_id)
+        self.vm_home_storage_spec = LibraryItems.DeploySpecVmHomeStorage(datastore=to_native(self.datastore_id))
+        self.disk_storage_spec = LibraryItems.DeploySpecDiskStorage(datastore=to_native(self.datastore_id))
         self.deploy_spec = LibraryItems.DeploySpec(name=self.vm_name,
                                                    placement=self.placement_spec,
                                                    vm_home_storage=self.vm_home_storage_spec,
@@ -293,19 +302,64 @@ class VmwareContentDeployTemplate(VmwareRestClient):
 def main():
     argument_spec = VmwareRestClient.vmware_client_argument_spec()
     argument_spec.update(
-        state=dict(type='str', default='present',
-                   choices=['present', 'poweredon']),
-        template=dict(type='str', aliases=['template_src'], required=True),
-        content_library=dict(type='str', aliases=[
-                             'content_library_src'], required=False),
-        name=dict(type='str', required=True, aliases=['vm_name']),
-        datacenter=dict(type='str', required=True),
-        datastore=dict(type='str', required=False),
-        datastore_cluster=dict(type='str', required=False),
-        folder=dict(type='str', required=True),
-        host=dict(type='str', required=False),
-        resource_pool=dict(type='str', required=False),
-        cluster=dict(type='str', required=False),
+        state=dict(
+            type='str',
+            choices=[
+                'present',
+                'poweredon'
+            ],
+            default='present'
+        ),
+        template=dict(
+            type='str',
+            aliases=[
+                'template_src'
+            ],
+            required=True
+        ),
+        library=dict(
+            type='str',
+            aliases=[
+                'content_library',
+                'content_library_src',
+            ],
+            required=False
+        ),
+        name=dict(
+            type='str',
+            aliases=[
+                'vm_name'
+            ],
+            required=True,
+        ),
+        datacenter=dict(
+            type='str',
+            required=True
+        ),
+        datastore=dict(
+            type='str',
+            required=False
+        ),
+        datastore_cluster=dict(
+            type='str',
+            required=False
+        ),
+        folder=dict(
+            type='str',
+            default='vm'
+        ),
+        host=dict(
+            type='str',
+            required=False
+        ),
+        resource_pool=dict(
+            type='str',
+            required=False
+        ),
+        cluster=dict(
+            type='str',
+            required=False
+        ),
     )
     module = AnsibleModule(
         argument_spec=argument_spec,
