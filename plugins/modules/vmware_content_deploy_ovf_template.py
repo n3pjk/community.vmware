@@ -120,6 +120,7 @@ vm_deploy_info:
 '''
 
 import logging
+import json
 
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib
 from ansible.module_utils._text import to_native
@@ -304,7 +305,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         except Exception as err:
             self._fail(msg="%s" % to_native(err))
 
-        self.result['response'] = dict(response)
+        self.result['response'] = dict(json.dumps(response))
         if not response.succeeded:
             self.result['vm_deploy_info'] = dict(
                 msg="Virtual Machine deployment failed",
