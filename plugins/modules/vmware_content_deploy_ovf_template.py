@@ -305,7 +305,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         except Exception as err:
             self._fail(msg="%s" % to_native(err))
 
-        self.result['response'] = dict(json.dumps(response))
+        self.result['response'] = json.dumps(response)
         if not response.succeeded:
             self.result['vm_deploy_info'] = dict(
                 msg="Virtual Machine deployment failed",
