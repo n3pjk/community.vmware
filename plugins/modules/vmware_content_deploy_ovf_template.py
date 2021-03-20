@@ -177,7 +177,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self.resourcepool = self.params.get('resource_pool')
         self.cluster = self.params.get('cluster')
         self.host = self.params.get('host')
-        self.storage_provisioning = (self.params['storage_provisioning']).lower
+        self.storage_provisioning = self.params['storage_provisioning']
         if self.storage_provisioning == 'eagerzeroedthick':
             self.storage_provisioning = 'eagerZeroedThick'
 
