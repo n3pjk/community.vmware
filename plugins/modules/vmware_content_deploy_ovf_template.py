@@ -189,8 +189,10 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             self.module.fail_json(msg="Failed to find the datacenter %s" % self.datacenter)
 
         # Find the datastore by the given datastore name
+        self.module.result['debug'] = {}
         if self.datastore:
             self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
+            self.module.result['debug']['ds_id'] = self.datastore_id
             if not self.datastore_id:
                 self.module.fail_json(msg="Failed to find the datastore %s" % self.datastore)
 
@@ -199,6 +201,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             dsc = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster)
             if dsc:
                 self.datastore_id = self.pyv.get_recommended_datastore(dsc)
+                self.module.result['debug']['ds_id'] = self.datastore_id
             else:
                 self.module.fail_json(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
 
