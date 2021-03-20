@@ -207,8 +207,15 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
 
     def fail(self, msg):
         if self.log_level == 'debug' and self.module_debug:
-            self.result['invocation'].update(
-                module_debug=self.module_debug)
+            if 'invocation' not in self.result:
+                self.result['invocation'] = {
+                    'module_args': self.params,
+                    'module_debug': self.module_debug
+                }
+            else:
+                self.result['invocation'].update(
+                    module_debug=self.module_debug
+                )
         self.module.fail_json(msg=msg, **self.result)
 
     def exit(self):
@@ -216,14 +223,10 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         if 'invocation' not in self.result:
             self.result['invocation'] = {
                 'module_args': self.params,
-                #               'module_kwargs': {
-                #                  'ServiceNowModuleKWArgs': self.ServiceNowModuleKWArgs,
-                #               }
             }
-        if self.log_level == 'debug':
-            if self.module_debug:
-                self.result['invocation'].update(
-                    module_debug=self.module_debug)
+        if self.log_level == 'debug' and self.module_debug:
+            self.result['invocation'].update(
+                module_debug=self.module_debug)
         self.module.exit_json(**self.result)
 
     def deploy_vm_from_ovf_template(self):
