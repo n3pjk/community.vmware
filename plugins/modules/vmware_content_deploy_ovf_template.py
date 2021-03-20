@@ -222,7 +222,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         if self.datastore_cluster and not self.datastore_id:
             dsc = self.pyv.find_datastore_cluster_by_name(self.datastore_cluster)
             if dsc:
-                self.datastore_id = self.pyv.get_recommended_datastore(dsc)
+                self.datastore = self.pyv.get_recommended_datastore(dsc)
+                self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
                 self.result['debug']['dsc_datastore_id'] = self.datastore_id
             else:
                 self.fail(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
