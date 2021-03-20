@@ -156,7 +156,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self.resourcepool_id = None
 
         # Turn on debug if not specified, but ANSIBLE_DEBUG is set
-        self.result['debug'] = {}
         if self.module._debug:
             self.warn('Enable debug output because ANSIBLE_DEBUG was set.')
             self.params['log_level'] = 'debug'
@@ -199,10 +198,24 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
     # Extend AnsibleModule methods
     #
 
+    def _mod_debug(self):
+        if self.log_level == 'debug':
+            self.result['debug'] = dict(
+                datacenter_id=self.datacenter_id,
+                datastore_id=self.datastore_id,
+                library_item_id=self.library_item_id,
+                folder_id=self.folder_id,
+                host_id=self.host_id,
+                cluster_id=self.cluster_id,
+                resourcepool_id=self.resourcepool_id
+            )
+
     def fail(self, msg):
+        self._mod_debug()
         self.module.fail_json(msg=msg, **self.result)
 
     def exit(self):
+        self._mod_debug()
         self.module.exit_json(**self.result)
 
     def deploy_vm_from_ovf_template(self):
@@ -214,7 +227,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         # Find the datastore by the given datastore name
         if self.datastore:
             self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
-            self.result['debug']['datastore_id'] = self.datastore_id
             if not self.datastore_id:
                 self.fail(msg="Failed to find the datastore %s" % self.datastore)
 
@@ -224,7 +236,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             if dsc:
                 self.datastore = self.pyv.get_recommended_datastore(dsc)
                 self.datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
-                self.result['debug']['dsc_datastore_id'] = self.datastore_id
             else:
                 self.fail(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
 
