@@ -153,7 +153,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self._pyv = PyVmomi(module=module)
         self._template_service = self.api_client.vcenter.vm_template.LibraryItems
         self._datacenter_obj = None
-        self._folder_obj = None
         self._datacenter_folder_type = {}
         self._datacenter_id = None
         self._datastore_id = None
@@ -171,6 +170,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self.log_level = self.params['log_level']
         if self.log_level == 'debug':
             # Turn on debugging
+            self.result['debug'] = {}
             logging.basicConfig(level=logging.DEBUG)
             logging.debug("Debug on for VmwareContentDeployOvfTemplate.")
 
@@ -251,17 +251,25 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             folder = (folder[2:]).strip('/')
         folder_parts = folder.strip('/').split('/')
         if len(folder_parts) > 0:
-            self._folder_obj = None
+            folder_obj = None
             for part in folder_parts:
                 part_folder_obj = self.get_folder(
                     datacenter_name=self.datacenter,
                     folder_name=part,
                     folder_type="vm",
-                    parent_folder=self._folder_obj
+                    parent_folder=folder_obj
                 )
                 if not part_folder_obj:
                     self._fail(msg="Could not find subfolder %s" % part)
-                self._folder_obj = part_folder_obj
+                folder_obj = part_folder_obj
+            if self.log_level == 'debug':
+                self.result['debug']['folder'] = dict(
+                    {
+                        '_vimid': folder_obj._vimid,
+                        'name': folder_obj.name,
+                        'parent': folder_obj.parent
+                    }
+                )
             self._folder_id = self.get_folder_by_name(self.datacenter, part)
         else:
             self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
@@ -362,15 +370,17 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
 
     def _mod_debug(self):
         if self.log_level == 'debug':
-            self.result['debug'] = dict(
-                datacenter_id=self._datacenter_id,
-                datastore_id=self._datastore_id,
-                library_item_id=self._library_item_id,
-                folder_id=self._folder_id,
-                host_id=self._host_id,
-                cluster_id=self._cluster_id,
-                resourcepool_id=self._resourcepool_id,
-                datacenter=dict(self._pyv.to_json(obj=self._datacenter_obj)),
+            self.result['debug'].update(
+                dict(
+                    datacenter_id=self._datacenter_id,
+                    datastore_id=self._datastore_id,
+                    library_item_id=self._library_item_id,
+                    folder_id=self._folder_id,
+                    host_id=self._host_id,
+                    cluster_id=self._cluster_id,
+                    resourcepool_id=self._resourcepool_id,
+                    datacenter=dict(self._pyv.to_json(obj=self._datacenter_obj)),
+                )
             )
 
     def _fail(self, msg):
