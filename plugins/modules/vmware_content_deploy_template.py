@@ -150,8 +150,6 @@ vm_deploy_info:
     }
 '''
 
-import logging
-
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.community.vmware.plugins.module_utils.vmware_rest_client import VmwareRestClient
 from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, get_all_objs, find_datacenter_by_name
@@ -200,8 +198,7 @@ class VmwareContentDeployTemplate(VmwareRestClient):
         self.log_level = self.params['log_level']
         if self.log_level == 'debug':
             # Turn on debugging
-            logging.basicConfig(level=logging.DEBUG)
-            logging.debug("Debug on for VmwareContentDeployOvfTemplate.")
+            self.result['debug'] = {}
 
         # Get parameters
         self.template = self.params.get('template')
