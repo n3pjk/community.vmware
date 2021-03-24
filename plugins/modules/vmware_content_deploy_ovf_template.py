@@ -153,6 +153,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self._pyv = PyVmomi(module=module)
         self._template_service = self.api_client.vcenter.vm_template.LibraryItems
         self._datacenter_obj = None
+        self._folder_obj = None
         self._datacenter_folder_type = {}
         self._datacenter_id = None
         self._datastore_id = None
@@ -250,17 +251,17 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             folder = (folder[2:]).strip('/')
         folder_parts = folder.strip('/').split('/')
         if len(folder_parts) > 0:
-            folder_obj = None
+            self._folder_obj = None
             for part in folder_parts:
                 part_folder_obj = self.get_folder(
                     datacenter_name=self.datacenter,
                     folder_name=part,
                     folder_type="vm",
-                    parent_folder=folder_obj
+                    parent_folder=self._folder_obj
                 )
                 if not part_folder_obj:
                     self._fail(msg="Could not find subfolder %s" % part)
-                folder_obj = part_folder_obj
+                self._folder_obj = part_folder_obj
             self._folder_id = self.get_folder_by_name(self.datacenter, part)
         else:
             self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
@@ -370,7 +371,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                 cluster_id=self._cluster_id,
                 resourcepool_id=self._resourcepool_id,
                 datacenter=dict(self._pyv.to_json(obj=self._datacenter_obj)),
-                folder=dict(self._pyv.to_json(obj=folder_obj))
+                folder=dict(self._pyv.to_json(obj=self._folder_obj))
             )
 
     def _fail(self, msg):
