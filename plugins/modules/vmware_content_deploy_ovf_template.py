@@ -152,6 +152,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self.module = module
         self._pyv = PyVmomi(module=module)
         self._template_service = self.api_client.vcenter.vm_template.LibraryItems
+        self._datacenter_obj = None
+        self._datacenter_folder_type = {}
         self._datacenter_id = None
         self._datastore_id = None
         self._library_item_id = None
@@ -196,6 +198,17 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
 
     def deploy_vm_from_ovf_template(self, power_on=False):
         # Find the datacenter by the given datacenter name
+        self._datacenter_obj = find_datacenter_by_name(self._pyv.content, datacenter_name=self.datacenter)
+        if self._datacenter_obj is None:
+            self._fail(msg="Failed to find datacenter object %s" % datacenter_name)
+        if self.log_level == 'debug':
+            self.result['debug']['datacenter'] = self._pyv.to_json(obj=self._datacenter_obj)
+        self._datacenter_folder_type = {
+            'vm': self._datacenter_obj.vmFolder,
+            'host': self._datacenter_obj.hostFolder,
+            'datastore': self._datacenter_obj.datastoreFolder,
+            'network': self._datacenter_obj.networkFolder,
+        }
         self._datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
         if not self._datacenter_id:
             self._fail(msg="Failed to find the datacenter %s" % self.datacenter)
@@ -336,11 +349,11 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         for folder in folder_objs:
             if parent_folder:
                 if folder.name == folder_name and \
-                   self.datacenter_folder_type[folder_type].childType == folder.childType:
+                   self._datacenter_folder_type[folder_type].childType == folder.childType:
                     return folder
             else:
                 if folder.name == folder_name and \
-                   self.datacenter_folder_type[folder_type].childType == folder.childType and \
+                   self._datacenter_folder_type[folder_type].childType == folder.childType and \
                    folder.parent.parent.name == datacenter_name:    # e.g. folder.parent.parent.name == /DC01/host/folder
                     return folder
 
