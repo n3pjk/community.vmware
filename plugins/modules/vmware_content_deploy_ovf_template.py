@@ -125,7 +125,7 @@ import json
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib
 from ansible.module_utils._text import to_native
 from ansible_collections.community.vmware.plugins.module_utils.vmware_rest_client import VmwareRestClient
-from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, get_all_objs
+from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, get_all_objs, find_datacenter_by_name
 
 HAS_VAUTOMATION = False
 try:
@@ -200,7 +200,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         # Find the datacenter by the given datacenter name
         self._datacenter_obj = find_datacenter_by_name(self._pyv.content, datacenter_name=self.datacenter)
         if self._datacenter_obj is None:
-            self._fail(msg="Failed to find datacenter object %s" % datacenter_name)
+            self._fail(msg="Failed to find datacenter object %s" % self.datacenter)
         if self.log_level == 'debug':
             self.result['debug']['datacenter'] = self._pyv.to_json(obj=self._datacenter_obj)
         self._datacenter_folder_type = {
