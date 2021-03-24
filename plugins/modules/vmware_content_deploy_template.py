@@ -278,6 +278,8 @@ class VmwareContentDeployTemplate(VmwareRestClient):
                 if not part_folder_obj:
                     self._fail(msg="Could not find subfolder %s" % part)
                 folder_obj = part_folder_obj
+            if self.log_level == 'debug':
+                self.result['debug']['folder'] = self._pyv.to_json(obj=folder_obj)
             self._folder_id = self.get_folder_by_name(self.datacenter, part)
         else:
             self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
@@ -345,6 +347,26 @@ class VmwareContentDeployTemplate(VmwareRestClient):
             vm_id=vm_id,
         )
         self._exit()
+
+    def get_folder(self, datacenter_name, folder_name, folder_type, parent_folder=None):
+        """
+        Get managed object of folder by name
+        Returns: Managed object of folder by name
+
+        """
+        folder_objs = get_all_objs(self._pyv.content, [vim.Folder], parent_folder)
+        for folder in folder_objs:
+            if parent_folder:
+                if folder.name == folder_name and \
+                   self.datacenter_folder_type[folder_type].childType == folder.childType:
+                    return folder
+            else:
+                if folder.name == folder_name and \
+                   self.datacenter_folder_type[folder_type].childType == folder.childType and \
+                   folder.parent.parent.name == datacenter_name:    # e.g. folder.parent.parent.name == /DC01/host/folder
+                    return folder
+
+        return None
 
     #
     # Wrap AnsibleModule methods

@@ -250,7 +250,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                 if not part_folder_obj:
                     self._fail(msg="Could not find subfolder %s" % part)
                 folder_obj = part_folder_obj
-            self.result['debug']['moref_value'] = folder_obj.value
+            if self.log_level == 'debug':
+                self.result['debug']['folder'] = self._pyv.to_json(obj=folder_obj)
             self._folder_id = self.get_folder_by_name(self.datacenter, part)
         else:
             self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
@@ -331,7 +332,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         Returns: Managed object of folder by name
 
         """
-        folder_objs = get_all_objs(self.content, [vim.Folder], parent_folder)
+        folder_objs = get_all_objs(self._pyv.content, [vim.Folder], parent_folder)
         for folder in folder_objs:
             if parent_folder:
                 if folder.name == folder_name and \
@@ -385,7 +386,8 @@ def main():
         state=dict(
             type='str',
             choices=[
-                'present'
+                'present',
+                'poweredon'
             ],
             default='present'
         ),
