@@ -201,8 +201,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self._datacenter_obj = find_datacenter_by_name(self._pyv.content, datacenter_name=self.datacenter)
         if self._datacenter_obj is None:
             self._fail(msg="Failed to find datacenter object %s" % self.datacenter)
-        if self.log_level == 'debug':
-            self.result['debug']['datacenter'] = dict(self._pyv.to_json(obj=self._datacenter_obj))
         self._datacenter_folder_type = {
             'vm': self._datacenter_obj.vmFolder,
             'host': self._datacenter_obj.hostFolder,
@@ -263,8 +261,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                 if not part_folder_obj:
                     self._fail(msg="Could not find subfolder %s" % part)
                 folder_obj = part_folder_obj
-            if self.log_level == 'debug':
-                self.result['debug']['folder'] = dict(self._pyv.to_json(obj=folder_obj))
             self._folder_id = self.get_folder_by_name(self.datacenter, part)
         else:
             self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
@@ -372,7 +368,9 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                 folder_id=self._folder_id,
                 host_id=self._host_id,
                 cluster_id=self._cluster_id,
-                resourcepool_id=self._resourcepool_id
+                resourcepool_id=self._resourcepool_id,
+                datacenter=dict(self._pyv.to_json(obj=self._datacenter_obj)),
+                folder=dict(self._pyv.to_json(obj=folder_obj))
             )
 
     def _fail(self, msg):
