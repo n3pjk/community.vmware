@@ -128,11 +128,17 @@ from ansible_collections.community.vmware.plugins.module_utils.vmware_rest_clien
 from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, get_all_objs
 
 HAS_VAUTOMATION = False
-VAUTOMATION_IMP_ERR = None
 try:
     from com.vmware.vcenter.ovf_client import LibraryItem
     from com.vmware.vapi.std.errors_client import Error
     HAS_VAUTOMATION = True
+except ImportError:
+    pass
+
+HAS_PYVMOMI = False
+try:
+    from pyvmomi import vim
+    HAS_PYVMOMI = True
 except ImportError:
     pass
 

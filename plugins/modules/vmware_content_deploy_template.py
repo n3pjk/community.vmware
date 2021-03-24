@@ -165,6 +165,13 @@ try:
 except ImportError:
     pass
 
+HAS_PYVMOMI = False
+try:
+    from pyvmomi import vim
+    HAS_PYVMOMI = True
+except ImportError:
+    pass
+
 
 class VmwareContentDeployTemplate(VmwareRestClient):
     def __init__(self, module):
