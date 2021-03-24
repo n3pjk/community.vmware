@@ -125,7 +125,7 @@ import json
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib
 from ansible.module_utils._text import to_native
 from ansible_collections.community.vmware.plugins.module_utils.vmware_rest_client import VmwareRestClient
-from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi
+from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, get_all_objs
 
 HAS_VAUTOMATION = False
 VAUTOMATION_IMP_ERR = None
@@ -143,7 +143,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         super(VmwareContentDeployOvfTemplate, self).__init__(module)
 
         # Initialize member variables
-        self.result = {}
         self.module = module
         self._pyv = PyVmomi(module=module)
         self._template_service = self.api_client.vcenter.vm_template.LibraryItems
@@ -154,6 +153,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self._host_id = None
         self._cluster_id = None
         self._resourcepool_id = None
+        self.result = {}
 
         # Turn on debug if not specified, but ANSIBLE_DEBUG is set
         if self.module._debug:
@@ -188,31 +188,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             )
             self._fail(msg="Virtual Machine deployment failed")
 
-    #
-    # Wrap AnsibleModule methods
-    #
-
-    def _mod_debug(self):
-        if self.log_level == 'debug':
-            self.result['debug'] = dict(
-                datacenter_id=self._datacenter_id,
-                datastore_id=self._datastore_id,
-                library_item_id=self._library_item_id,
-                folder_id=self._folder_id,
-                host_id=self._host_id,
-                cluster_id=self._cluster_id,
-                resourcepool_id=self._resourcepool_id
-            )
-
-    def _fail(self, msg):
-        self._mod_debug()
-        self.module.fail_json(msg=msg, **self.result)
-
-    def _exit(self):
-        self._mod_debug()
-        self.module.exit_json(**self.result)
-
-    def deploy_vm_from_ovf_template(self):
+    def deploy_vm_from_ovf_template(self, power_on=False):
         # Find the datacenter by the given datacenter name
         self._datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
         if not self._datacenter_id:
@@ -247,8 +223,31 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             if not self._library_item_id:
                 self._fail(msg="Failed to find the library Item %s" % self.template)
 
-        # Find the folder by the given folder name
-        self._folder_id = self.get_folder_by_name(self.datacenter, self.folder)
+        # Find the folder by the given FQPN folder name
+        # The FQPN is I(datacenter)/I(folder type)/folder name/... for
+        # example Lab/vm/someparent/myfolder is a vm folder in the Lab datacenter.
+        folder = self.folder.strip('/')
+        if folder.startswith(self.datacenter):
+            folder = (folder[len(self.datacenter):]).strip('/')
+        if folder.startswith("vm"):
+            folder = (folder[2:]).strip('/')
+        folder_parts = folder.strip('/').split('/')
+        if len(folder_parts) > 0:
+            folder_obj = None
+            for part in folder_parts:
+                part_folder_obj = self.get_folder(
+                    datacenter_name=self.datacenter,
+                    folder_name=part,
+                    folder_type="vm",
+                    parent_folder=folder_obj
+                )
+                if not part_folder_obj:
+                    self._fail(msg="Could not find subfolder %s" % part)
+                folder_obj = part_folder_obj
+            self.result['debug']['moref_value'] = folder_obj.value
+            self._folder_id = self.get_folder_by_name(self.datacenter, part)
+        else:
+            self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
         if not self._folder_id:
             self._fail(msg="Failed to find the folder %s" % self.folder)
 
@@ -280,7 +279,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
 
         self.ovf_summary = self.api_client.vcenter.ovf.LibraryItem.filter(
             ovf_library_item_id=self._library_item_id,
-            target=deployment_target)
+            target=deployment_target
+        )
 
         self.deploy_spec = LibraryItem.ResourcePoolDeploymentSpec(
             name=self.vm_name,
@@ -293,7 +293,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             locale=None,
             flags=None,
             additional_parameters=None,
-            default_datastore_id=self._datastore_id)
+            default_datastore_id=self._datastore_id
+        )
 
         response = {
             'succeeded': False
@@ -318,6 +319,50 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         )
         self._exit()
 
+    def get_folder(self, datacenter_name, folder_name, folder_type, parent_folder=None):
+        """
+        Get managed object of folder by name
+        Returns: Managed object of folder by name
+
+        """
+        folder_objs = get_all_objs(self.content, [vim.Folder], parent_folder)
+        for folder in folder_objs:
+            if parent_folder:
+                if folder.name == folder_name and \
+                   self.datacenter_folder_type[folder_type].childType == folder.childType:
+                    return folder
+            else:
+                if folder.name == folder_name and \
+                   self.datacenter_folder_type[folder_type].childType == folder.childType and \
+                   folder.parent.parent.name == datacenter_name:    # e.g. folder.parent.parent.name == /DC01/host/folder
+                    return folder
+
+        return None
+
+    #
+    # Wrap AnsibleModule methods
+    #
+
+    def _mod_debug(self):
+        if self.log_level == 'debug':
+            self.result['debug'] = dict(
+                datacenter_id=self._datacenter_id,
+                datastore_id=self._datastore_id,
+                library_item_id=self._library_item_id,
+                folder_id=self._folder_id,
+                host_id=self._host_id,
+                cluster_id=self._cluster_id,
+                resourcepool_id=self._resourcepool_id
+            )
+
+    def _fail(self, msg):
+        self._mod_debug()
+        self.module.fail_json(msg=msg, **self.result)
+
+    def _exit(self):
+        self._mod_debug()
+        self.module.exit_json(**self.result)
+
 
 def main():
     argument_spec = VmwareRestClient.vmware_client_argument_spec()
@@ -331,6 +376,13 @@ def main():
                 ],
             default='normal'
             ),
+        state=dict(
+            type='str',
+            choices=[
+                'present'
+            ],
+            default='present'
+        ),
         template=dict(
             type='str',
             aliases=[
@@ -405,16 +457,34 @@ def main():
             ['host', 'cluster'],
         ],
     )
+
     result = {'failed': False, 'changed': False}
     vmware_contentlib_create = VmwareContentDeployOvfTemplate(module)
-    if module.check_mode:
+    if module.params['state'] == 'present':
+        if module.check_mode:
+            result.update(
+                vm_name=module.params['name'],
+                changed=True,
+                desired_operation='Create VM with PowerOff State',
+            )
+            module.exit_json(**result)
+        vmware_contentlib_create.deploy_vm_from_ovf_template()
+    elif module.params['state'] == 'poweredon':
+        if module.check_mode:
+            result.update(
+                vm_name=module.params['name'],
+                changed=True,
+                desired_operation='Create VM with PowerON State',
+            )
+            module.exit_json(**result)
+        vmware_contentlib_create.deploy_vm_from_ovf_template(power_on=True)
+    else:
         result.update(
             vm_name=module.params['name'],
-            changed=True,
-            desired_operation='Create VM with PowerOff State',
+            changed=False,
+            desired_operation="State '%s' is not implemented" % module.params['state']
         )
-        module.exit_json(**result)
-    vmware_contentlib_create.deploy_vm_from_ovf_template()
+        module.fail_json(**result)
 
 
 if __name__ == '__main__':
