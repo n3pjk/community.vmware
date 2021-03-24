@@ -371,7 +371,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                 cluster_id=self._cluster_id,
                 resourcepool_id=self._resourcepool_id,
                 datacenter=dict(self._pyv.to_json(obj=self._datacenter_obj)),
-                folder=dict(self._pyv.to_json(obj=self._folder_obj))
             )
 
     def _fail(self, msg):
