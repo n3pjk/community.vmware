@@ -263,13 +263,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                     self._fail(msg="Could not find subfolder %s" % part)
                 folder_obj = part_folder_obj
             if self.log_level == 'debug':
-                self.result['debug']['folder'] = dict(
-                    {
-                        '_vimid': folder_obj._vimid,
-                        'name': folder_obj.name,
-                        'parent': folder_obj.parent
-                    }
-                )
+                self.result['debug']['folder'] = dict(self._pyv.to_json(folder_obj))
             self._folder_id = self.get_folder_by_name(self.datacenter, part)
         else:
             self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
@@ -379,7 +373,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                     host_id=self._host_id,
                     cluster_id=self._cluster_id,
                     resourcepool_id=self._resourcepool_id,
-                    datacenter=dict(self._pyv.to_json(obj=self._datacenter_obj)),
                 )
             )
 
