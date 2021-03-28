@@ -260,9 +260,10 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             if self.log_level == 'debug':
                 self.result['debug']['folder'] = dict(
                     {
-                        'moId': folder_obj.GetMoId,
-                        'name': folder_obj.name,
-                        'parent': folder_obj.parent
+                        'type': type(folder_obj),
+                        'dir': dir(folder_obj),
+                        'parent': folder_obj.parent,
+                        'type': type(folder_obj)
                     }
                 )
             self._folder_id = self.get_folder_by_name(self.datacenter, part)
