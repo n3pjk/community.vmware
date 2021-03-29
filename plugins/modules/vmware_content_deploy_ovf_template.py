@@ -203,9 +203,11 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             'datastore': self._datacenter_obj.datastoreFolder,
             'network': self._datacenter_obj.networkFolder,
         }
-        self._datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
-        if not self._datacenter_id:
+#       self._datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
+        if not self._datacenter_obj:
             self._fail(msg="Failed to find the datacenter %s" % self.datacenter)
+        else:
+            self._datacenter_id = self._datacenter_obj._moId
 
         # Find the datastore by the given datastore name
         if self.datastore:
@@ -246,29 +248,30 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             folder = (folder[2:]).strip('/')
         folder_parts = folder.strip('/').split('/')
         if len(folder_parts) > 0:
-            folder_obj = None
+            parent_obj = self._datacenter_obj.vmFolder
             for part in folder_parts:
-                part_folder_obj = self.get_folder(
-                    datacenter_name=self.datacenter,
-                    folder_name=part,
-                    folder_type="vm",
-                    parent_folder=folder_obj
-                )
-                if not part_folder_obj:
+                folder_obj = None
+                for part_obj in parent_obj.childEntity:
+                    if part_obj.name == part and part_obj.childType == 'vm':
+                        folder_obj = part_obj
+                        parent_obj = part_obj
+                        break
+                if not folder_obj:
                     self._fail(msg="Could not find subfolder %s" % part)
-                folder_obj = part_folder_obj
-            if self.log_level == 'debug':
-                self.result['debug']['folder'] = dict(
-                    {
-                        'type': type(folder_obj),
-                        'dir': dir(folder_obj),
-                        'parent': folder_obj.parent,
-                        'type': type(folder_obj)
-                    }
-                )
-            self._folder_id = self.get_folder_by_name(self.datacenter, part)
         else:
-            self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
+            folder_obj = self._datacenter_obj.vmFolder
+        self._folder_id = folder_obj._moId
+        if self.log_level == 'debug':
+            self.result['debug']['folder'] = dict(
+                {
+                    'moId': folder_obj._moId,
+                    'name': folder_obj.name,
+                    'type': type(folder_obj),
+                    'dir': dir(folder_obj),
+                    'parent': folder_obj.parent,
+                    'parts': folder_parts
+                }
+            )
         if not self._folder_id:
             self._fail(msg="Failed to find the folder %s" % self.folder)
 
@@ -339,26 +342,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             vm_id=response.resource_id.id,
         )
         self._exit()
-
-    def get_folder(self, datacenter_name, folder_name, folder_type, parent_folder=None):
-        """
-        Get managed object of folder by name
-        Returns: Managed object of folder by name
-
-        """
-        folder_objs = get_all_objs(self._pyv.content, [vim.Folder], parent_folder)
-        for folder in folder_objs:
-            if parent_folder:
-                if folder.name == folder_name and \
-                   self._datacenter_folder_type[folder_type].childType == folder.childType:
-                    return folder
-            else:
-                if folder.name == folder_name and \
-                   self._datacenter_folder_type[folder_type].childType == folder.childType and \
-                   folder.parent.parent.name == datacenter_name:    # e.g. folder.parent.parent.name == /DC01/host/folder
-                    return folder
-
-        return None
 
     #
     # Wrap AnsibleModule methods
