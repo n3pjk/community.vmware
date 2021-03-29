@@ -248,16 +248,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         else:
             folder_obj = self._datacenter_obj.vmFolder
         self._folder_id = folder_obj._moId
-        if self.log_level == 'debug':
-            self.result['debug']['folder'] = dict(
-                {
-                    'moId': folder_obj._moId,
-                    'name': folder_obj.name,
-                    'type': type(folder_obj),
-                    'parent': folder_obj.parent,
-                    'parts': folder_parts
-                }
-            )
         if not self._folder_id:
             self._fail(msg="Failed to find the folder %s" % self.folder)
 
