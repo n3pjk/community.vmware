@@ -122,7 +122,7 @@ vm_deploy_info:
 from ansible.module_utils.basic import AnsibleModule, env_fallback, missing_required_lib
 from ansible.module_utils._text import to_native
 from ansible_collections.community.vmware.plugins.module_utils.vmware_rest_client import VmwareRestClient
-from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, get_all_objs, find_datacenter_by_name
+from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, find_datacenter_by_name, find_folder_by_fqpn
 
 HAS_VAUTOMATION = False
 try:
@@ -217,7 +217,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         # Find the LibraryItem (Template) by the given LibraryItem name
         if self.library:
             self._library_item_id = self.get_library_item_from_content_library_name(
-                self.template, self.library)
+                self.template, self.library
+            )
             if not self._library_item_id:
                 self._fail(msg="Failed to find the library Item %s in content library %s" % (self.template, self.library))
         else:
@@ -228,46 +229,31 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         # Find the folder by the given FQPN folder name
         # The FQPN is I(datacenter)/I(folder type)/folder name/... for
         # example Lab/vm/someparent/myfolder is a vm folder in the Lab datacenter.
-        folder = self.folder.strip('/')
-        if folder.startswith(self.datacenter):
-            folder = (folder[len(self.datacenter):]).strip('/')
-        if folder.startswith("vm"):
-            folder = (folder[2:]).strip('/')
-        folder_parts = folder.strip('/').split('/')
-        if len(folder_parts) > 0:
-            parent_obj = self._datacenter_obj.vmFolder
-            for part in folder_parts:
-                folder_obj = None
-                for part_obj in parent_obj.childEntity:
-                    if part_obj.name == part and 'Folder' in part_obj.childType:
-                        folder_obj = part_obj
-                        parent_obj = part_obj
-                        break
-                if not folder_obj:
-                    self._fail(msg="Could not find subfolder %s" % part)
-        else:
-            folder_obj = self._datacenter_obj.vmFolder
-        self._folder_id = folder_obj._moId
+        folder_obj = find_folder_by_fqpn(self._pyv.content, self.folder, self.datacenter, folder_type='vm')
+        if folder_obj:
+            self._folder_id = folder_obj._moId
         if not self._folder_id:
             self._fail(msg="Failed to find the folder %s" % self.folder)
 
-        # Verfy host exists if specified
+        # Find the Host by the given name
         if self.host:
             self._host_id = self.get_host_by_name(self.datacenter, self.host)
             if not self._host_id:
                 self._fail(msg="Failed to find the Host %s" % self.host)
 
-        # Find the resourcepool by the given resourcepool name
-        if self.resourcepool:
-            self._resourcepool_id = self.get_resource_pool_by_name(self.datacenter, self.resourcepool, self.cluster, self.host)
-            if not self._resourcepool_id:
-                self._fail(msg="Failed to find the resource_pool %s" % self.resourcepool)
-        elif self.cluster:
+        # Find the Cluster by the given Cluster name
+        if self.cluster:
             self._cluster_id = self.get_cluster_by_name(self.datacenter, self.cluster)
             if not self._cluster_id:
                 self._fail(msg="Failed to find the Cluster %s" % self.cluster)
             cluster_obj = self.api_client.vcenter.Cluster.get(self._cluster_id)
             self._resourcepool_id = cluster_obj.resource_pool
+
+        # Find the resourcepool by the given resourcepool name
+        if self.resourcepool and self.cluster and self.host:
+            self._resourcepool_id = self.get_resource_pool_by_name(self.datacenter, self.resourcepool, self.cluster, self.host)
+            if not self._resourcepool_id:
+                self._fail(msg="Failed to find the resource_pool %s" % self.resourcepool)
 
         if not self._resourcepool_id:
             self._fail(msg="Failed to find a resource pool either by name or cluster")

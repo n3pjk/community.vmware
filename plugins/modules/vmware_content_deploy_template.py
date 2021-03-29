@@ -152,7 +152,7 @@ vm_deploy_info:
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.community.vmware.plugins.module_utils.vmware_rest_client import VmwareRestClient
-from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, get_all_objs, find_datacenter_by_name
+from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, find_datacenter_by_name, find_folder_by_fqpn
 from ansible.module_utils._text import to_native
 
 HAS_VAUTOMATION_PYTHON_SDK = False
@@ -181,8 +181,6 @@ class VmwareContentDeployTemplate(VmwareRestClient):
         self._pyv = PyVmomi(module=module)
         self._template_service = self.api_client.vcenter.vm_template.LibraryItems
         self._datacenter_obj = None
-        self._datacenter_folder_type = {}
-        self._datacenter_id = None
         self._datastore_id = None
         self._library_item_id = None
         self._folder_id = None
@@ -207,7 +205,6 @@ class VmwareContentDeployTemplate(VmwareRestClient):
         self.datacenter = self.params.get('datacenter')
         self.datastore = self.params.get('datastore')
         self.datastore_cluster = self.params.get('datastore_cluster')
-        self._datastore_id = None
         self.folder = self.params.get('folder')
         self.resourcepool = self.params.get('resource_pool')
         self.cluster = self.params.get('cluster')
@@ -224,18 +221,7 @@ class VmwareContentDeployTemplate(VmwareRestClient):
     def deploy_vm_from_template(self, power_on=False):
         # Find the datacenter by the given datacenter name
         self._datacenter_obj = find_datacenter_by_name(self._pyv.content, datacenter_name=self.datacenter)
-        if self._datacenter_obj is None:
-            self._fail(msg="Failed to find datacenter object %s" % self.datacenter)
-        if self.log_level == 'debug':
-            self.result['debug']['datacenter'] = self._pyv.to_json(obj=self._datacenter_obj)
-        self._datacenter_folder_type = {
-            'vm': self._datacenter_obj.vmFolder,
-            'host': self._datacenter_obj.hostFolder,
-            'datastore': self._datacenter_obj.datastoreFolder,
-            'network': self._datacenter_obj.networkFolder,
-        }
-        self._datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
-        if not self._datacenter_id:
+        if not self._datacenter_obj:
             self._fail(msg="Failed to find the datacenter %s" % self.datacenter)
 
         # Find the datastore by the given datastore name
@@ -248,7 +234,8 @@ class VmwareContentDeployTemplate(VmwareRestClient):
         if self.datastore_cluster and not self._datastore_id:
             dsc = self._pyv.find_datastore_cluster_by_name(self.datastore_cluster)
             if dsc:
-                self._datastore_id = self._pyv.get_recommended_datastore(dsc)
+                self.datastore = self._pyv.get_recommended_datastore(dsc)
+                self._datastore_id = self.get_datastore_by_name(self.datacenter, self.datastore)
             else:
                 self._fail(msg="Failed to find the datastore cluster %s" % self.datastore_cluster)
 
@@ -270,43 +257,17 @@ class VmwareContentDeployTemplate(VmwareRestClient):
         # Find the folder by the given FQPN folder name
         # The FQPN is I(datacenter)/I(folder type)/folder name/... for
         # example Lab/vm/someparent/myfolder is a vm folder in the Lab datacenter.
-        folder = self.folder.strip('/')
-        if folder.startswith(self.datacenter):
-            folder = (folder[len(self.datacenter):]).strip('/')
-        if folder.startswith("vm"):
-            folder = (folder[2:]).strip('/')
-        folder_parts = folder.strip('/').split('/')
-        if len(folder_parts) > 0:
-            folder_obj = None
-            for part in folder_parts:
-                part_folder_obj = self.get_folder(
-                    datacenter_name=self.datacenter,
-                    folder_name=part,
-                    folder_type="vm",
-                    parent_folder=folder_obj
-                )
-                if not part_folder_obj:
-                    self._fail(msg="Could not find subfolder %s" % part)
-                folder_obj = part_folder_obj
-            if self.log_level == 'debug':
-                self.result['debug']['folder'] = self._pyv.to_json(obj=folder_obj)
-            self._folder_id = self.get_folder_by_name(self.datacenter, part)
-        else:
-            self._folder_id = self.get_folder_by_name(self.datacenter, "vm")
+        folder_obj = find_folder_by_fqpn(self._pyv.content, self.folder, self.datacenter, folder_type='vm')
+        if folder_obj:
+            self._folder_id = folder_obj._moId
         if not self._folder_id:
             self._fail(msg="Failed to find the folder %s" % self.folder)
 
-        # Find the Host by given name
+        # Find the Host by the given name
         if self.host:
             self._host_id = self.get_host_by_name(self.datacenter, self.host)
             if not self._host_id:
                 self._fail(msg="Failed to find the Host %s" % self.host)
-
-        # Find the resourcepool by the given resourcepool name
-        if self.resourcepool:
-            self._resourcepool_id = self.get_resource_pool_by_name(self.datacenter, self.resourcepool, self.cluster, self.host)
-            if not self._resourcepool_id:
-                self._fail(msg="Failed to find the resource_pool %s" % self.resourcepool)
 
         # Find the Cluster by the given Cluster name
         if self.cluster:
@@ -315,6 +276,12 @@ class VmwareContentDeployTemplate(VmwareRestClient):
                 self._fail(msg="Failed to find the Cluster %s" % self.cluster)
             cluster_obj = self.api_client.vcenter.Cluster.get(self._cluster_id)
             self._resourcepool_id = cluster_obj.resource_pool
+
+        # Find the resourcepool by the given resourcepool name
+        if self.resourcepool and self.cluster and self.host:
+            self._resourcepool_id = self.get_resource_pool_by_name(self.datacenter, self.resourcepool, self.cluster, self.host)
+            if not self._resourcepool_id:
+                self._fail(msg="Failed to find the resource_pool %s" % self.resourcepool)
 
         # Create VM placement specs
         self.placement_spec = LibraryItems.DeployPlacementSpec(folder=self._folder_id)
@@ -357,26 +324,6 @@ class VmwareContentDeployTemplate(VmwareRestClient):
             vm_id=vm_id,
         )
         self._exit()
-
-    def get_folder(self, datacenter_name, folder_name, folder_type, parent_folder=None):
-        """
-        Get managed object of folder by name
-        Returns: Managed object of folder by name
-
-        """
-        folder_objs = get_all_objs(self._pyv.content, [vim.Folder], parent_folder)
-        for folder in folder_objs:
-            if parent_folder:
-                if folder.name == folder_name and \
-                   self._datacenter_folder_type[folder_type].childType == folder.childType:
-                    return folder
-            else:
-                if folder.name == folder_name and \
-                   self._datacenter_folder_type[folder_type].childType == folder.childType and \
-                   folder.parent.parent.name == datacenter_name:    # e.g. folder.parent.parent.name == /DC01/host/folder
-                    return folder
-
-        return None
 
     #
     # Wrap AnsibleModule methods
