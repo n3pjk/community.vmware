@@ -150,8 +150,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         self._pyv = PyVmomi(module=module)
         self._template_service = self.api_client.vcenter.vm_template.LibraryItems
         self._datacenter_obj = None
-        self._datacenter_folder_type = {}
-        self._datacenter_id = None
         self._datastore_id = None
         self._library_item_id = None
         self._folder_id = None
@@ -195,19 +193,8 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
     def deploy_vm_from_ovf_template(self, power_on=False):
         # Find the datacenter by the given datacenter name
         self._datacenter_obj = find_datacenter_by_name(self._pyv.content, datacenter_name=self.datacenter)
-        if self._datacenter_obj is None:
-            self._fail(msg="Failed to find datacenter object %s" % self.datacenter)
-        self._datacenter_folder_type = {
-            'vm': self._datacenter_obj.vmFolder,
-            'host': self._datacenter_obj.hostFolder,
-            'datastore': self._datacenter_obj.datastoreFolder,
-            'network': self._datacenter_obj.networkFolder,
-        }
-#       self._datacenter_id = self.get_datacenter_by_name(datacenter_name=self.datacenter)
         if not self._datacenter_obj:
             self._fail(msg="Failed to find the datacenter %s" % self.datacenter)
-        else:
-            self._datacenter_id = self._datacenter_obj._moId
 
         # Find the datastore by the given datastore name
         if self.datastore:
@@ -252,7 +239,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
             for part in folder_parts:
                 folder_obj = None
                 for part_obj in parent_obj.childEntity:
-                    if part_obj.name == part and part_obj.childType == 'vm':
+                    if part_obj.name == part and 'Folder' in part_obj.childType:
                         folder_obj = part_obj
                         parent_obj = part_obj
                         break
@@ -267,7 +254,6 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
                     'moId': folder_obj._moId,
                     'name': folder_obj.name,
                     'type': type(folder_obj),
-                    'dir': dir(folder_obj),
                     'parent': folder_obj.parent,
                     'parts': folder_parts
                 }
@@ -351,7 +337,7 @@ class VmwareContentDeployOvfTemplate(VmwareRestClient):
         if self.log_level == 'debug':
             self.result['debug'].update(
                 dict(
-                    datacenter_id=self._datacenter_id,
+                    datacenter_id=self._datacenter_obj._moId,
                     datastore_id=self._datastore_id,
                     library_item_id=self._library_item_id,
                     folder_id=self._folder_id,
