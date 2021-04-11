@@ -33,7 +33,9 @@ options:
     type: str
   moid:
     description:
-    - The managed object id of the object.
+    - A list of managed object ids.
+    type: list
+    elements: str
 extends_documentation_fragment:
 - community.vmware.vmware.documentation
 
@@ -124,7 +126,7 @@ class VMwareObjectPermissionsInfo(PyVmomi):
         self.auth_manager = self.content.authorizationManager
 
         self.moid = []
-        self.moid[0] = self.params['moid']
+        self.moid.append(self.params['moid'])
         self.principal = self.params['principal']
 
         self.get_perms()
@@ -167,7 +169,8 @@ def main():
         dict(
             moid=dict(
                 required=True,
-                type='str'
+                type='list',
+                elements='str'
                 ),
             principal=dict(
                 required=True,
