@@ -148,7 +148,8 @@ class VMwareObjectPermissionsInfo(PyVmomi):
 
     def get_perms(self):
         #   self.current_perms = self.auth_manager.RetrieveEntityPermissions(self.current_obj, False)
-        self.current_perms = self.auth_manager.FetchUserPrivilegeOnEntities(self.current_obj, self.principal)
+        self.moid.append(self.current_obj)
+        self.current_perms = self.auth_manager.FetchUserPrivilegeOnEntities(self.moid, self.principal)
 
     def get_object(self):
         # find_obj doesn't include rootFolder
