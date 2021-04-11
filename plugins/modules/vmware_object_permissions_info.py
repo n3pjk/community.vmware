@@ -31,27 +31,9 @@ options:
     - Required if C(group) is not specified.
     - If specifying domain user, required separator of domain uses backslash.
     type: str
-  group:
-    description:
-    - The name of the group.
-    - Required if C(principal) is not specified.
-    type: str
   moid:
     description:
     - The managed object id of the object.
-  object_name:
-    description:
-    - The name of the object name.
-    type: str
-    required: True
-  object_type:
-    description:
-    - The object type being targeted.
-    - Required if C(object_name) is specified.
-    choices: ['Folder', 'VirtualMachine', 'Datacenter', 'ResourcePool',
-              'Datastore', 'Network', 'HostSystem', 'ComputeResource',
-              'ClusterComputeResource', 'DistributedVirtualSwitch']
-    type: str
 extends_documentation_fragment:
 - community.vmware.vmware.documentation
 
@@ -123,9 +105,9 @@ changed:
 '''
 
 try:
-  from pyVmomi import vim, vmodl
+    from pyVmomi import vim, vmodl
 except ImportError:
-  pass
+    pass
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils._text import to_native
@@ -133,110 +115,73 @@ from ansible_collections.community.vmware.plugins.module_utils.vmware import PyV
 
 
 class VMwareObjectPermissionsInfo(PyVmomi):
-  def __init__(self, module):
-    super(VMwareObjectPermissionsInfo, self).__init__(module)
-    self.module = module
-    self.params = module.params
-    self.result = {}
-    self.is_group = False
-    self.auth_manager = self.content.authorizationManager
+    def __init__(self, module):
+        super(VMwareObjectPermissionsInfo, self).__init__(module)
+        self.module = module
+        self.params = module.params
+        self.result = {}
+        self.is_group = False
+        self.auth_manager = self.content.authorizationManager
 
-    self.moid = []
-    self.moid[0] = self.params.get('moid')
-    if self.params.get('principal', None) is not None:
-      self.applied_to = self.params['principal']
-    elif self.params.get('group', None) is not None:
-      self.applied_to = self.params['group']
-      self.is_group = True
+        self.moid = []
+        self.moid[0] = self.params['moid']
+        self.principal = self.params['principal']
 
-    self.get_object()
-    self.get_perms()
-    self.result['permissions'] = self.to_json(self.current_perms)
-    self.module.exit_json(**self.result)
+        self.get_perms()
+        self.result['permissions'] = self.to_json(self.current_perms)
+        self.module.exit_json(**self.result)
 
-  def get_perms(self):
-    #   self.current_perms = self.auth_manager.RetrieveEntityPermissions(self.current_obj, False)
-    self.current_perms = self.auth_manager.FetchUserPrivilegeOnEntities(self.moid, self.applied_to)
+    def get_perms(self):
+        #   self.current_perms = self.auth_manager.RetrieveEntityPermissions(self.current_obj, False)
+        self.current_perms = self.auth_manager.FetchUserPrivilegeOnEntities(self.moid, self.applied_to)
 
-  def get_object(self):
-    # find_obj doesn't include rootFolder
-    if self.params['object_type'] == 'Folder' and self.params['object_name'] == 'rootFolder':
-      self.current_obj = self.content.rootFolder
-      return
-    try:
-      getattr(vim, self.params['object_type'])
-    except AttributeError:
-      self.module.fail_json(msg="Object type %s is not valid." % self.params['object_type'])
-    self.current_obj = find_obj(content=self.content,
-                                vimtype=[getattr(vim, self.params['object_type'])],
-                                name=self.params['object_name'])
+    def get_object(self):
+        # find_obj doesn't include rootFolder
+        if self.params['object_type'] == 'Folder' and self.params['object_name'] == 'rootFolder':
+            self.current_obj = self.content.rootFolder
+            return
+        try:
+            getattr(vim, self.params['object_type'])
+        except AttributeError:
+            self.module.fail_json(msg="Object type %s is not valid." % self.params['object_type'])
+        self.current_obj = find_obj(content=self.content,
+                                    vimtype=[getattr(vim, self.params['object_type'])],
+                                    name=self.params['object_name'])
 
-    if self.current_obj is None:
-      self.module.fail_json(
-          msg="Specified object %s of type %s was not found."
-          % (self.params['object_name'], self.params['object_type'])
-      )
-    if self.params['object_type'] == 'DistributedVirtualSwitch':
-      msg = "You are applying permissions to a Distributed vSwitch. " \
-            "This will probably fail, since Distributed vSwitches inherits permissions " \
-            "from the datacenter or a folder level. " \
-            "Define permissions on the datacenter or the folder containing the switch."
-      self.module.warn(msg)
+        if self.current_obj is None:
+            self.module.fail_json(
+                msg="Specified object %s of type %s was not found."
+                % (self.params['object_name'], self.params['object_type'])
+            )
+        if self.params['object_type'] == 'DistributedVirtualSwitch':
+            msg = "You are applying permissions to a Distributed vSwitch. " \
+                  "This will probably fail, since Distributed vSwitches inherits permissions " \
+                  "from the datacenter or a folder level. " \
+                  "Define permissions on the datacenter or the folder containing the switch."
+            self.module.warn(msg)
 
 
 def main():
-  argument_spec = vmware_argument_spec()
-  argument_spec.update(
-      dict(
-          moid=dict(
-              type='str'
-              ),
-          object_name=dict(
-              type='str'
-              ),
-          object_type=dict(
-              type='str',
-              default='Folder',
-              choices=[
-                  'Folder',
-                  'VirtualMachine',
-                  'Datacenter',
-                  'ResourcePool',
-                  'Datastore',
-                  'Network',
-                  'HostSystem',
-                  'ComputeResource',
-                  'ClusterComputeResource',
-                  'DistributedVirtualSwitch',
-                  ],
-              ),
-          principal=dict(
-              type='str'
-              ),
-          group=dict(
-              type='str'
-              ),
-          )
-  )
+    argument_spec = vmware_argument_spec()
+    argument_spec.update(
+        dict(
+            moid=dict(
+                required=True,
+                type='str'
+                ),
+            principal=dict(
+                required=True,
+                type='str'
+                ),
+        )
+    )
 
-  module = AnsibleModule(
-      argument_spec=argument_spec,
-      supports_check_mode=True,
-      mutually_exclusive=[
-          ['moid', 'object_name'],
-          ['principal', 'group']
-          ],
-      required_one_of=[
-          ['moid', 'object_name'],
-          ['principal', 'group']
-          ],
-      required_together=[
-          ['object_name', 'object_type']
-          ]
-  )
+    module = AnsibleModule(
+        argument_spec=argument_spec,
+        supports_check_mode=True,
+    )
 
-  vmware_object_permission = VMwareObjectPermissionsInfo(module)
-  vmware_object_permission.process_state()
+    vmware_object_permission = VMwareObjectPermissionsInfo(module)
 
 
 if __name__ == '__main__':
