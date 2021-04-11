@@ -125,8 +125,7 @@ class VMwareObjectPermissionsInfo(PyVmomi):
         self.is_group = False
         self.auth_manager = self.content.authorizationManager
 
-        self.moid = []
-        self.moid.append(self.params['moid'])
+        self.moid = self.params['moid']
         self.principal = self.params['principal']
 
         self.get_perms()
