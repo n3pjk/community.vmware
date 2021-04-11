@@ -36,6 +36,19 @@ options:
     - A list of managed object ids.
     type: list
     elements: str
+  object_name:
+    description:
+    - The object name to assigned permission.
+    type: str
+    required: True
+  object_type:
+    description:
+    - The object type being targeted.
+    default: 'Folder'
+    choices: ['Folder', 'VirtualMachine', 'Datacenter', 'ResourcePool',
+              'Datastore', 'Network', 'HostSystem', 'ComputeResource',
+              'ClusterComputeResource', 'DistributedVirtualSwitch']
+    type: str
 extends_documentation_fragment:
 - community.vmware.vmware.documentation
 
@@ -128,13 +141,14 @@ class VMwareObjectPermissionsInfo(PyVmomi):
         self.moid = self.params['moid']
         self.principal = self.params['principal']
 
+        self.get_object()
         self.get_perms()
         self.result['permissions'] = self.to_json(self.current_perms)
         self.module.exit_json(**self.result)
 
     def get_perms(self):
         #   self.current_perms = self.auth_manager.RetrieveEntityPermissions(self.current_obj, False)
-        self.current_perms = self.auth_manager.FetchUserPrivilegeOnEntities(self.moid, self.principal)
+        self.current_perms = self.auth_manager.FetchUserPrivilegeOnEntities(self.current_obj, self.principal)
 
     def get_object(self):
         # find_obj doesn't include rootFolder
@@ -167,20 +181,46 @@ def main():
     argument_spec.update(
         dict(
             moid=dict(
-                required=True,
-                type='list',
-                elements='str'
-                ),
+              type='list',
+              elements='str'
+            ),
             principal=dict(
-                required=True,
+              required=True,
+              type='str'
+            ),
+            object_name=dict(
                 type='str'
-                ),
+            ),
+            object_type=dict(
+                type='str',
+                choices=[
+                    'Folder',
+                    'VirtualMachine',
+                    'Datacenter',
+                    'ResourcePool',
+                    'Datastore',
+                    'Network',
+                    'HostSystem',
+                    'ComputeResource',
+                    'ClusterComputeResource',
+                    'DistributedVirtualSwitch',
+                    ]
+            ),
         )
     )
 
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
+        mutually_exclusive=[
+            ['moid', 'object_name']
+        ],
+        required_one_of=[
+            ['moid', 'object_name']
+        ],
+        required_together=[
+            ['object_name', 'object_type']
+        ],
     )
 
     vmware_object_permission = VMwareObjectPermissionsInfo(module)
