@@ -129,7 +129,7 @@ except ImportError:
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils._text import to_native
-from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, vmware_argument_spec, find_obj, to_json
+from ansible_collections.community.vmware.plugins.module_utils.vmware import PyVmomi, vmware_argument_spec, find_obj
 
 
 class VMwareObjectPermissionsInfo(PyVmomi):
@@ -149,7 +149,7 @@ class VMwareObjectPermissionsInfo(PyVmomi):
 
     self.get_object()
     self.get_perms()
-    self.result['permissions'] = to_json(self.current_perms)
+    self.result['permissions'] = self.to_json(self.current_perms)
     self.module.exit_json(**self.result)
 
   def get_perms(self):
