@@ -141,6 +141,8 @@ class VMwareObjectPermissionsInfo(PyVmomi):
     self.is_group = False
     self.auth_manager = self.content.authorizationManager
 
+    self.moid = []
+    self.moid[0] = self.params.get('moid')
     if self.params.get('principal', None) is not None:
       self.applied_to = self.params['principal']
     elif self.params.get('group', None) is not None:
@@ -153,7 +155,8 @@ class VMwareObjectPermissionsInfo(PyVmomi):
     self.module.exit_json(**self.result)
 
   def get_perms(self):
-    self.current_perms = self.auth_manager.RetrieveEntityPermissions(self.current_obj, False)
+    #   self.current_perms = self.auth_manager.RetrieveEntityPermissions(self.current_obj, False)
+    self.current_perms = self.auth_manager.FetchUserPrivilegeOnEntities(self.moid, self.applied_to)
 
   def get_object(self):
     # find_obj doesn't include rootFolder
