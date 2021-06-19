@@ -1,3 +1,7 @@
+# n3pjk's tools
+galaxy.yml.j2
+release.yml
+
 # Mac Junk
 .DS_Store
 
@@ -396,3 +400,4 @@ $RECYCLE.BIN/
 changelogs/.plugin-cache.yaml
 
 # End of https://www.gitignore.io/api/git,linux,pydev,python,windows,pycharm+all,jupyternotebook,vim,webstorm,emacs,dotenv
+.gitignore
