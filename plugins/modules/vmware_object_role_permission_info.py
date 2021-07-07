@@ -23,7 +23,7 @@ notes:
     - The ESXi login user must have the appropriate rights to administer permissions.
     - Supports check mode.
 requirements:
-    - "python >= 2.7"
+    - "python >= 3"
     - PyVmomi
 options:
   principal:
@@ -32,6 +32,7 @@ options:
     - If provided, actual permissions on the specified object are returned for the principal, instead of roles.
     type: str
     required: False
+    version_added: '1.12.0'
   object_name:
     description:
     - The object name to assigned permission.
